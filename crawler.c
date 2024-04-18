@@ -72,6 +72,8 @@ char *dequeue(URLQueue *queue) {
     return url;
 }
 
+//this runs in its own proccess
+
 
 void extract_and_enqueue_urls(const char *html, URLQueue *queue) {
     const char *pattern = "<a href=\"";
