@@ -9,6 +9,7 @@ int url_count = 0;  // Counter for fetched URLs
 int url_limit = 100;  // Limit of URLs to fetch
 pthread_mutex_t count_mutex;
 pthread_cond_t limit_reached_cond;
+FILE *fptr; // Log file pointer
 
 typedef struct URLQueueNode {
     char *url;
@@ -134,9 +135,11 @@ void *fetch_url(void *arg) {
             CURLcode res = curl_easy_perform(curl);
             if (res == CURLE_OK) {
                 printf("Fetched URL: %s\n", url);  // Print only successfully fetched URLs.
+                fprintf(fptr, "Fetched URL: %s\n", url); //Log print
                 extract_and_enqueue_urls(data.buffer, queue);
             } else {
                 fprintf(stderr, "Error fetching %s: %s\n", url, curl_easy_strerror(res));  // Print errors if the fetch fails.
+                fprintf(fptr, "Error fetching %s: %s\n", url, curl_easy_strerror(res));  // Log print
             }
             free(url);  // Free the URL after processing.
         }
@@ -168,6 +171,7 @@ int main(int argc, char *argv[]) {
 
     // Further initialization and thread starting...
 
+    fptr = fopen("log.txt", "w");
 
     // Initialize mutex and condition variable
     pthread_mutex_init(&count_mutex, NULL);
@@ -190,6 +194,7 @@ int main(int argc, char *argv[]) {
     // Clean up
     pthread_mutex_destroy(&count_mutex);
     pthread_cond_destroy(&limit_reached_cond);
+    fclose(fptr);
 
     return 0;
 }
