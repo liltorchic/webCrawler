@@ -5,11 +5,10 @@
 #include <unistd.h>
 #include <curl/curl.h>
 
-int url_count = 0;  // Counter for fetched URLs
-int url_limit = 100;  // Limit of URLs to fetch
+int url_count = 0;
+int url_limit = 100;
 pthread_mutex_t count_mutex;
-pthread_cond_t limit_reached_cond;
-FILE *fptr; // Log file pointer
+FILE *fptr;
 
 typedef struct URLQueueNode {
     char *url;
@@ -26,6 +25,13 @@ typedef struct {
     size_t buffer_size;
 } CallbackData;
 
+void initQueue(URLQueue *queue);
+void enqueue(URLQueue *queue, const char *url);
+char *dequeue(URLQueue *queue);
+void extract_and_enqueue_urls(const char *html, URLQueue *queue);
+size_t write_data(void *ptr, size_t size, size_t nmemb, void *stream);
+void *fetch_url(void *arg);
+int main(int argc, char *argv[]);
 
 void initQueue(URLQueue *queue) {
     queue->head = queue->tail = NULL;
@@ -36,12 +42,15 @@ void enqueue(URLQueue *queue, const char *url) {
     pthread_mutex_lock(&count_mutex);
     if (url_count >= url_limit) {
         pthread_mutex_unlock(&count_mutex);
-        return;  // Stop enqueueing if limit is reached
+        return;
     }
     pthread_mutex_unlock(&count_mutex);
 
     URLQueueNode *newNode = malloc(sizeof(URLQueueNode));
-    newNode->url = strdup(url);
+    if (newNode == NULL) {
+        return;
+    }
+    newNode->url = strdup(url);  // Consider replacing strdup with a manual copy to ensure compliance
     newNode->next = NULL;
 
     pthread_mutex_lock(&queue->lock);
@@ -53,7 +62,6 @@ void enqueue(URLQueue *queue, const char *url) {
     queue->tail = newNode;
     pthread_mutex_unlock(&queue->lock);
 }
-
 
 char *dequeue(URLQueue *queue) {
     pthread_mutex_lock(&queue->lock);
@@ -73,17 +81,14 @@ char *dequeue(URLQueue *queue) {
     return url;
 }
 
-//this runs in its own proccess
-
-
 void extract_and_enqueue_urls(const char *html, URLQueue *queue) {
     const char *pattern = "<a href=\"";
     const char *ptr = strstr(html, pattern);
     while (ptr != NULL) {
-        ptr += strlen(pattern);  // Move past the "<a href=\""
+        ptr += strlen(pattern);
         const char *end = strchr(ptr, '"');
         if (end != NULL) {
-            char *url = strndup(ptr, end - ptr);
+            char *url = strndup(ptr, end - ptr);  // Consider replacing strndup with a manual copy to ensure compliance
             enqueue(queue, url);
             free(url);
             ptr = strstr(end, pattern);
@@ -95,7 +100,7 @@ size_t write_data(void *ptr, size_t size, size_t nmemb, void *stream) {
     CallbackData *data = (CallbackData *)stream;
     size_t real_size = size * nmemb;
     size_t dest_len = strlen(data->buffer);
-    size_t space_left = data->buffer_size - dest_len - 1; // -1 for NULL terminator
+    size_t space_left = data->buffer_size - dest_len - 1;
 
     if (space_left > real_size) {
         strncat(data->buffer, (char*)ptr, real_size);
@@ -105,53 +110,53 @@ size_t write_data(void *ptr, size_t size, size_t nmemb, void *stream) {
     return real_size;
 }
 
-
 void *fetch_url(void *arg) {
     URLQueue *queue = (URLQueue *)arg;
     CURL *curl = curl_easy_init();
-    CallbackData data = {malloc(1024 * 100), 1024 * 100};  // Allocate space for the fetched page content.
+    CallbackData data = {malloc(1024 * 100), 1024 * 100};
+
+    if (!data.buffer) {  // Check for malloc failure
+        return NULL;
+    }
 
     while (1) {
         char *url = dequeue(queue);
         if (url == NULL) {
-            break;  // Exit the loop if no URLs are left to process.
+            break;
         }
 
         pthread_mutex_lock(&count_mutex);
         if (url_count >= url_limit) {
             pthread_mutex_unlock(&count_mutex);
             free(url);
-            break;  // Exit if the URL limit is reached.
+            break;
         }
-        url_count++;  // Increment the URL counter safely within the mutex lock.
+        url_count++;
         pthread_mutex_unlock(&count_mutex);
 
         if (curl) {
             curl_easy_setopt(curl, CURLOPT_URL, url);
             curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_data);
             curl_easy_setopt(curl, CURLOPT_WRITEDATA, &data);
-            data.buffer[0] = '\0';  // Clear the buffer before using it to fetch new content.
+            data.buffer[0] = '\0';
 
             CURLcode res = curl_easy_perform(curl);
             if (res == CURLE_OK) {
-                printf("Fetched URL: %s\n", url);  // Print only successfully fetched URLs.
-                fprintf(fptr, "Fetched URL: %s\n", url); //Log print
+                printf("Fetched URL: %s\n", url);
+                fprintf(fptr, "Fetched URL: %s\n", url);
                 extract_and_enqueue_urls(data.buffer, queue);
             } else {
-                fprintf(stderr, "Error fetching %s: %s\n", url, curl_easy_strerror(res));  // Print errors if the fetch fails.
-                fprintf(fptr, "Error fetching %s: %s\n", url, curl_easy_strerror(res));  // Log print
+                fprintf(stderr, "Error fetching %s: %s\n", url, curl_easy_strerror(res));
+                fprintf(fptr, "Error fetching %s: %s\n", url, curl_easy_strerror(res));
             }
-            free(url);  // Free the URL after processing.
+            free(url);
         }
     }
 
-    free(data.buffer);  // Free the buffer allocated for page content.
-    curl_easy_cleanup(curl);  // Clean up the CURL instance.
+    free(data.buffer);
+    curl_easy_cleanup(curl);
     return NULL;
 }
-
-
-
 
 int main(int argc, char *argv[]) {
 
@@ -167,17 +172,16 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    printf("Starting URL: %s with limit %d\n", starting_url, url_limit); // Debug print
-
-    // Further initialization and thread starting...
+    printf("Starting URL: %s with limit %d\n", starting_url, url_limit);
 
     fptr = fopen("log.txt", "w");
+    if (!fptr) {
+        fprintf(stderr, "Failed to open log file.\n");
+        return 1;
+    }
 
-    // Initialize mutex and condition variable
     pthread_mutex_init(&count_mutex, NULL);
-    pthread_cond_init(&limit_reached_cond, NULL);
 
-    // URL queue and threading setup
     URLQueue queue;
     initQueue(&queue);
     enqueue(&queue, starting_url);
@@ -191,9 +195,7 @@ int main(int argc, char *argv[]) {
         pthread_join(threads[i], NULL);
     }
 
-    // Clean up
     pthread_mutex_destroy(&count_mutex);
-    pthread_cond_destroy(&limit_reached_cond);
     fclose(fptr);
 
     return 0;
