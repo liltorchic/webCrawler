@@ -1,6 +1,5 @@
 CC = gcc
-CFLAGS = -std=c11 -pedantic -pthread
-LDFLAGS = -lcurl
+CFLAGS = -std=c11 -pedantic -pthread -lcurl
 all: crawler
 
 crawler: crawler.c
