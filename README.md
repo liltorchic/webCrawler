@@ -1,9 +1,10 @@
 # webCrawler
  OS Final Project
 Karem Baz - RUID: 201006972 
-
+Alex Koehn - RUID: 220002171
+Aidan Haynesworth - RUID: 201000013
 
 Libraries Approach: we did not need to use a lot of libraries for this project. We used the libraries from the template and we added the curl library. We had no experience with library before but we learned it from the internet. This library helped us extract URL links from html content of websites. 
 Variables: We had to declare some global variables to track the number of URLs we have and match and check it with the limit inputted when running the program. We used this POSIX threads tutorial to gain more info on Pthreads library. https://www.cs.cmu.edu/afs/cs/academic/class/15492-f07/www/pthreads.html 
 Structures: we kept the structres declared from the template the same. 
-Functions: We did not change anything in the initialization of the queue function (initQueue). 
+Functions: We did not change anything in the initialization of the queue function (initQueue). We added some debug statments and thread locking in the enqueue due to use of global variables. nothing was changed in dequeue function. We added a function named extract_and_enqueue_urls_from_file. In this function we created a temp file so we can store the html content of URLS in it. We then look for the url link in the html content of the page by looking for the pattern "<a href=/"". The url link usually comes after that pattern and  the url ends with a quotation. Therefore we used pointer manuplation to grab the content between the pattern and the quotation mark which is the url link. We use dynamic memory allocation to input each line. The fetch_url function was empty so we needed a way to get the urls. After some research, we decided to learn about and use the curl library. we learned it from here https://curl.se/libcurl/c/libcurl-tutorial.html . In the main function, we edited the argument count to 3 to support the one additional argument we added which is the limit provided by the user. we wrote the output of calling the functions in a txt file. So, there are two ways to check if the program is working and they are terminal and txt file. Creation and joining the threads functions remained the same. Added the removal of locks and mutex at the end of program.  
